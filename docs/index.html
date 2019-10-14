@@ -1,0 +1,230 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+</style>
+<title>CS 184 Rasterizer</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2019</h1>
+<h1 align="middle">Project 1: Rasterizer</h1>
+<h2 align="middle">Nathan Petreaca, CS184-ago</h2>
+
+<br><br>
+
+<div>
+
+<h2 align="middle">Overview</h2>
+<p>In this project I implemented a rasterizer. What does this do? Given a set of pixels, a screen, we are able to create shapes and transform them. In terms of images, we are able to display them and also transform them. </p>
+
+<p> This would be simple if our number of pixels was infinite, and so was our processing power, but it is limited. A limit in pixels creates aliasing, a misinterpretation of our image signals which are too high frequency for our limited display. This is an inevitable problem considering that our triangles, the fundamental building block of the shapes we create, are created using lines that have infinite precision. However, we will never be able to have infinite pixels, leading to an undesirable stairstep pattern or jaggies to be created.</p>
+
+<p>
+To fix this aliasing, our main enemy in this domain, we enact several methods. They are detailed in this report below.
+</p>
+
+<p> When displaying triangles, we test weather each pixel lies within or outside the triangle to display it. To transform the shapes created from these triangles, we use transform matrices. To use textures on our triangles we use a mapping between triangles in screen space and texture space using barycentric coordinates.</p>
+
+<p> To battle aliasing we implement supersampling to average colors inside pixels, we implement bilinear filtering to average the mapping between a textures color and the color on the display, and we implement mipmaps to average textures as they move away and toward the display.</p>
+
+<p> As we battle aliasing we also battle computation and enact methods to reduce it. </p>
+
+<h2 align="middle">Section I: Rasterization</h2>
+
+<h3 align="middle">Part 1: Rasterizing single-color triangles</h3>
+
+<p>To rasterize triangles, we basically just need to figure out what side of each line/edge of the triangle a point lies on. If the point lies on the same side of all the edges, it is inside the triangle. We simply use the equation:</p
+
+<div align="center">
+        <img src="images/image5.jpg" width="400px">
+        <br>
+</div>
+<p>
+We use this equation for each pair of points that define an edge. If all the values are positive, or all negative, then the point is inside the triangle. We test to see if it is all negative or positive to account for differences in winding order (weather we check for the point of on the left side or right side of the edges.)</p>
+
+<p> The points that we check are those from the minimum x and minimum y coordinate to the maximum x and maximum y coordinate of the three edge point that define the triangle. This means that we are only checking at most the bounding box of the points around the triangle.</p>
+
+<div align="center">
+        <img src="images/screenshot_2-15_16-1-38.png" width="1000px">
+        <br>
+</div>
+
+
+
+<h3 align="middle">Part 2: Antialiasing triangles</h3>
+
+<p>We are able to rasterize triangles, but some of them do not look so good. They are aliased. The exact triangle dimensions do not fit perfectly into the center of each pixel location, giving stair step patterns and jagged corners. To fix this we use super sampling we see how much of the triangle actually occupies the inside of each pixel and average the color accordingly. To do this, we simply sample at more than just the center of the pixel and then average the samples. For example, if a red triangle is sampled in 2 positions of the pixel it will be half red half the background color.</p>
+
+<p>
+The only modifications I needed to make was to add looping inside the pixels depending on how many samples were to be done, and then going through the samples and averaging.
+</p>
+
+<p> Below we see the effects of super sampling. With a higher rate of sampling some of the high frequency areas are able to be represented. Each pixel acts as a low pass filter on its subsamples. </p>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/screenshot_2-16_21-34-7.png" align="middle" width="800px"/>
+        <figcaption align="middle">Sample rate 1.</figcaption>
+      </td>
+      <td>
+        <img src="images/screenshot_2-16_21-34-21.png" align="middle" width="800px"/>
+        <figcaption align="middle">Sample rate 4.</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/screenshot_2-16_21-35-38.png" align="middle" width="800px"/>
+        <figcaption align="middle">Sample rate 9.</figcaption>
+      </td>
+      <td>
+        <img src="images/screenshot_2-16_21-35-4.png" align="middle" width="800px"/>
+        <figcaption align="middle">Sample Rate 16.</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+
+<h3 align="middle">Part 3: Transforms</h3>
+
+<p>
+Here we have a cube man who is represented with a hierarchal structure. This means that moving the arm will also move the hand. To move each part, we can use transforms in the form of matrices.
+</p>
+
+
+<p>Now that we can make triangles, we can move, scale and rotate them around. I tried to make robot man walk like an Egyptian.</p>
+
+<div align="center">
+        <img src="images/screenshot_2-15_19-57-9.png" width="1000px">
+        <br>
+</div>
+
+
+<h2 align="middle">Section II: Sampling</h2>
+
+<h3 align="middle">Part 4: Barycentric coordinates</h3>
+
+<p>Barycentric coordinates are simply a way of representing the values of a triangle or other shape through a linear combination of its vertices. By doing this, you can achieve a continuous shade / transition of values like color. Looking at the provided image below, each vertex is defined a separate color (red, green, blue). The colors at each point represent the Barycentric coordinates that can be produced at each point.</p>
+
+
+
+<div align="center">
+        <img src="images/Barycentric_RGB.png" width="500px">
+        <figcaption align="middle">https://commons.wikimedia.org/wiki/File:Barycentric_RGB.png.</figcaption>
+        <br>
+</div>
+
+<p> Here we mapped the points on the color wheel to a triangle like the one shown above. By using barycentric coordiantes we can map a point in the screen space (the color wheel) to a point in the color triangle. </p>
+
+<div align="center">
+        <img src="images/screenshot_2-16_0-41-2.png" width="1000px">
+        <br>
+</div>
+
+
+<h3 align="middle">Part 5: "Pixel sampling" for texture mapping</h3>
+
+<p>Pixel sampling isn’t really described by its term. It is more like texel sampling. To texel sample is the technique of mapping a texel in the texture space to pixels in the screen space. In this particular case, triangles / a mesh of triangles, are the connection between the two spaces. Each triangle in the screen space is associated with a triangle in the texture space. Thus, by using Barycentric coordinates, the color of a position on the screen triangle can be evaluated associating it to the triangle in the texture space.  </p>
+
+<p>
+Using Barycentric coordinates, a mapping from a point in screen space (x,y) to a point in texture space (u,v) is made.
+</p>
+
+<p>
+In this case, there are two different ways of sampling the texture space, nearest and bilinear. Nearest simply finds the point closest to (u,v) and returns that. Bilinear finds the four closest points and averages their colors.
+</p>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/screenshot_2-16_18-50-20.png" align="middle" width="600px"/>
+        <figcaption align="middle">nearest sampling at 1 sample per pixel .</figcaption>
+      </td>
+      <td>
+        <img src="images/screenshot_2-16_18-50-35.png" align="middle" width="600px"/>
+        <figcaption align="middle">bilinear sampling at 1 sample per pixel.</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/screenshot_2-16_18-51-42.png" align="middle" width="600px"/>
+        <figcaption align="middle">nearest sampling at 16 samples per pixel.</figcaption>
+      </td>
+      <td>
+        <img src="images/screenshot_2-16_18-52-22.png" align="middle" width="600px"/>
+        <figcaption align="middle">bilinear sampling at 16 samples per pixel.</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+
+<p>
+Looking at the results, super sampling definitely gives the best results, but it gives them at some cost. Bilinear is a little bit smoother than nearest especially in the white lines of the map.
+</p>
+
+
+<h3 align="middle">Part 6: "Level sampling" with mipmaps for texture mapping</h3>
+
+<p>Level sampling is the process of first creating a pyramid of textures that are progressively smaller and then using the appropriate texture for its distance in a scene. This pyramid is called a mipmap. For example, if there was a brick wall near our view and a brick wall away from our view, instead of sampling from the same texture for both brick walls, we can choose a lower level / smaller texture in our pyramid for the far away wall, and a higher/ larger texture for the close by wall. This prevents aliasing that can occur from sampling a large texture that has been minified.  </p>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/screenshot_2-16_21-25-43.png" align="middle" width="800px"/>
+        <figcaption align="middle">L_ZERO and P_NEAREST.</figcaption>
+      </td>
+      <td>
+        <img src="images/screenshot_2-16_21-25-49.png" align="middle" width="800px"/>
+        <figcaption align="middle">L_ZERO and P_LINEAR .</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/screenshot_2-16_21-26-2.png" align="middle" width="800px"/>
+        <figcaption align="middle">L_NEAREST and P_LINEAR .</figcaption>
+      </td>
+      <td>
+        <img src="images/screenshot_2-16_21-26-7.png" align="middle" width="800px"/>
+        <figcaption align="middle">L_NEAREST and P_LINEAR.</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div align="center">
+        <img src="images/screenshot_2-16_21-26-18.png" width="1000px">
+        <figcaption align="middle">L_LINEAR and P_LINEAR.</figcaption>
+        <br>
+</div>
+
+<p>
+    Above you can see all the combinations of the settings. Bilinear creates the best results in terms of smoothing regardless of level, but requires four times the computation. In terms of the mipmap levels, Bilinear filtering between two levels seems too give a bit of improvement for twice the computation. If you look at the difference between nearest level selection with bilinear sampling and trilinear sampling, there does not seem to be that much difference. So, if I wanted a good medium between Trilinear and level zero with nearest, I would go for L_NEAREST and P_LINEAR. At least that is what it seems to me.
+    </p>
+
+</body>
+</html>
